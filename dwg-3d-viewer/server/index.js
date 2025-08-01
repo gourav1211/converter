@@ -121,16 +121,23 @@ app.use((req, res) => {
 
 // --- Server Start ---
 
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    
-    // Check if the converter path needs to be updated
-    if (LocalConverterService.converterPath.includes('C:\\path\\to\\your\\ODAFileConverter.exe')) {
-        console.warn('🚨 ACTION REQUIRED: The local converter path is not set.');
-        console.warn('   Please install the ODA File Converter and update the path in:');
-        console.warn('   server/services/localConverterService.js');
-    }
-});
+function startServer(port) {
+    const server = app.listen(port, () => {
+        console.log(`Server running on http://localhost:${port}`);
+        console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+
+    server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+            console.log(`Port ${port} is already in use, trying port ${port + 1}...`);
+            startServer(port + 1);
+        } else {
+            console.error('Server error:', err);
+            process.exit(1);
+        }
+    });
+}
+
+startServer(PORT);
 
 module.exports = app;

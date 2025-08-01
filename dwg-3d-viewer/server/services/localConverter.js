@@ -1,7 +1,7 @@
-// Alternative DWG conversion service using local tools
-const { exec } = require('child_process');
+// DWG conversion service using LibreDWG + Assimp
 const path = require('path');
 const fs = require('fs');
+const { convertDWGtoGLTF } = require('../../scripts/convert-dwg');
 
 class LocalDWGConverter {
     constructor() {
@@ -16,28 +16,19 @@ class LocalDWGConverter {
     }
 
     /**
-     * Convert DWG to OBJ using local tools
-     * This requires installing ODA File Converter or similar
+     * Convert DWG to glTF using LibreDWG + Assimp pipeline
      */
-    async convertDWGToOBJ(inputPath, fileName) {
+    async convertDWGToGLTF(inputPath, fileName) {
         try {
-            console.log(`🔄 Converting ${fileName} locally...`);
+            console.log(`🔄 Converting ${fileName} locally using LibreDWG + Assimp...`);
             
-            const outputName = fileName.replace('.dwg', '.obj');
+            const outputName = fileName.replace('.dwg', '.gltf');
             const outputPath = path.join(this.outputDir, outputName);
             
-            // Method 1: Try ODA File Converter (if installed)
-            try {
-                await this.tryODAConverter(inputPath, outputPath);
-                return { success: true, outputPath, format: 'obj' };
-            } catch (odaError) {
-                console.log('ODA Converter not available, trying alternatives...');
-            }
-
-            // Method 2: Try other conversion methods
-            // (Add more conversion tools here as needed)
+            // Use LibreDWG → Assimp conversion
+            await convertDWGtoGLTF(inputPath, outputPath);
             
-            throw new Error('No local DWG converter available');
+            return { success: true, outputPath, format: 'gltf' };
 
         } catch (error) {
             console.error('❌ Local conversion failed:', error.message);
@@ -45,24 +36,12 @@ class LocalDWGConverter {
         }
     }
 
-    async tryODAConverter(inputPath, outputPath) {
-        return new Promise((resolve, reject) => {
-            // ODA File Converter command (you'd need to install this)
-            const command = `ODAFileConverter "${inputPath}" "${path.dirname(outputPath)}" ACAD2018 DXF 0 1 "${path.basename(outputPath)}"`;
-            
-            exec(command, (error, stdout, stderr) => {
-                if (error) {
-                    reject(new Error(`ODA Converter failed: ${error.message}`));
-                    return;
-                }
-                
-                if (fs.existsSync(outputPath)) {
-                    resolve(outputPath);
-                } else {
-                    reject(new Error('Conversion completed but output file not found'));
-                }
-            });
-        });
+    /**
+     * Legacy method name for backward compatibility
+     */
+    async convertDWGToOBJ(inputPath, fileName) {
+        console.log('⚠️  convertDWGToOBJ is deprecated, using convertDWGToGLTF instead');
+        return this.convertDWGToGLTF(inputPath, fileName);
     }
 
     /**

@@ -5,9 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DWG to 3D Viewer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Autodesk Platform Services Viewer -->
-    <link rel="stylesheet" href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css" type="text/css">
-    <script src="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js"></script>
+    <!-- Three.js ES6 modules via importmap -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.150.0/build/three.module.js",
+                "three/examples/jsm/controls/OrbitControls.js": "https://unpkg.com/three@0.150.0/examples/jsm/controls/OrbitControls.js",
+                "three/examples/jsm/loaders/GLTFLoader.js": "https://unpkg.com/three@0.150.0/examples/jsm/loaders/GLTFLoader.js"
+            }
+        }
+    </script>
     <style>
         .drag-area {
             border: 2px dashed #cbd5e1;
@@ -18,8 +25,9 @@
             background-color: #eff6ff;
         }
         #viewer-canvas {
-            max-width: 100%;
-            max-height: 100%;
+            width: 100%;
+            height: 100%;
+            border-radius: 0.5rem;
         }
         .loading-spinner {
             border: 4px solid #f3f4f6;
@@ -94,12 +102,17 @@
                         <p class="text-lg">Your 3D model will appear here</p>
                         <p class="text-sm text-gray-400 mt-2">Upload a DWG file to start viewing</p>
                     </div>
-                    <div id="viewer-canvas" class="hidden w-full h-full"></div>
+                    <canvas id="viewer-canvas" class="hidden w-full h-full rounded-lg"></canvas>
                 </div>
                 
                 <!-- Viewer Controls Info -->
                 <div id="viewer-controls" class="hidden mt-4 p-4 bg-blue-50 rounded-lg">
-                    <h3 class="font-semibold text-blue-800 mb-2">Viewer Controls:</h3>
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="font-semibold text-blue-800">Viewer Controls:</h3>
+                        <button id="reset-view-btn" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1 rounded transition-colors">
+                            Reset View
+                        </button>
+                    </div>
                     <ul class="text-sm text-blue-700 space-y-1">
                         <li>• <strong>Rotate:</strong> Left click and drag</li>
                         <li>• <strong>Zoom:</strong> Mouse wheel or right click and drag</li>
@@ -125,7 +138,7 @@
                         <span class="text-2xl font-bold text-blue-600">2</span>
                     </div>
                     <h3 class="font-semibold text-gray-800 mb-2">Convert</h3>
-                    <p class="text-gray-600 text-sm">Our system converts your DWG file to a 3D model using Autodesk Platform Services</p>
+                    <p class="text-gray-600 text-sm">Our system converts your DWG file to a 3D glTF model using LibreDWG + Assimp</p>
                 </div>
                 <div class="text-center">
                     <div class="bg-blue-100 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
@@ -138,6 +151,6 @@
         </div>
     </div>
 
-    <script src="js/app.js"></script>
+    <script type="module" src="js/app.js"></script>
 </body>
 </html>
