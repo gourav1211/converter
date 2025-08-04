@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>2D Line Viewer</title>
+    <style>
+        body { margin: 0; padding: 20px; background: #f0f0f0; }
+        canvas { background: white; border: 2px solid #333; }
+        .info { margin: 20px 0; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h2>2D Line Drawing Viewer</h2>
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <div class="info">
+        <p>This viewer specifically handles 2D line drawings from DWG files.</p>
+        <div id="info"></div>
+    </div>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+        const info = document.getElementById('info');
+        function log(msg) {
+            console.log(msg);
+            info.innerHTML += msg + '<br>';
+        }
+
+        // Setup scene with optimal settings for 2D drawings
+        const canvas = document.getElementById('canvas');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+        
+        const camera = new THREE.OrthographicCamera(
+            -100, 100, 75, -75, 0.1, 1000
+        );
+        camera.position.set(0, 0, 100);
+        camera.lookAt(0, 0, 0);
+        
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setSize(800, 600);
+        
+        const controls = new OrbitControls(camera, canvas);
+        controls.enableRotate = false; // Disable rotation for 2D view
+        controls.enableZoom = true;
+        controls.enablePan = true;
+        
+        // Simple lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+        
+        log('2D viewer initialized');
+        
+        // Load and process the model
+        const loader = new GLTFLoader();
+        loader.load('/uploads/blocks_and_tables_-_metric.gltf', (gltf) => {
+            log('Model loaded successfully');
+            
+            let lineCount = 0;
+            let allPoints = [];
+            
+            // Extract all line data and create simple 2D visualization
+            gltf.scene.traverse((child) => {
+                if (child.isMesh && child.geometry) {
+                    const position = child.geometry.attributes.position;
+                    const indices = child.geometry.index;
+                    
+                    if (position && indices) {
+                        log(`Processing ${child.name}: ${indices.count} indices`);
+                        
+                        const positions = position.array;
+                        const indicesArray = indices.array;
+                        
+                        // Create a group for this mesh's lines
+                        const linesGroup = new THREE.Group();
+                        linesGroup.name = child.name + '_2d_lines';
+                        
+                        // Process line segments
+                        for (let i = 0; i < indicesArray.length; i += 2) {
+                            const idx1 = indicesArray[i] * 3;
+                            const idx2 = indicesArray[i + 1] * 3;
+                            
+                            const start = new THREE.Vector3(
+                                positions[idx1],
+                                positions[idx1 + 1],
+                                0 // Force Z to 0 for pure 2D view
+                            );
+                            
+                            const end = new THREE.Vector3(
+                                positions[idx2],
+                                positions[idx2 + 1],
+                                0
+                            );
+                            
+                            allPoints.push(start, end);
+                            
+                            // Create a thick line using a stretched box
+                            const distance = start.distanceTo(end);
+                            if (distance > 0.01) {
+                                const lineGeometry = new THREE.BoxGeometry(distance, 0.5, 0.1);
+                                const lineMaterial = new THREE.MeshBasicMaterial({ 
+                                    color: getColorForMesh(child.name)
+                                });
+                                const line = new THREE.Mesh(lineGeometry, lineMaterial);
+                                
+                                // Position and orient the line
+                                const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+                                line.position.copy(midpoint);
+                                
+                                // Calculate rotation
+                                const direction = new THREE.Vector3().subVectors(end, start).normalize();
+                                const angle = Math.atan2(direction.y, direction.x);
+                                line.rotation.z = angle;
+                                
+                                linesGroup.add(line);
+                                lineCount++;
+                            }
+                        }
+                        
+                        scene.add(linesGroup);
+                        log(`Added ${linesGroup.children.length} lines for ${child.name}`);
+                    }
+                }
+            });
+            
+            log(`Total lines created: ${lineCount}`);
+            
+            // Calculate bounds and set camera
+            if (allPoints.length > 0) {
+                const bounds = new THREE.Box3().setFromPoints(allPoints);
+                const center = bounds.getCenter(new THREE.Vector3());
+                const size = bounds.getSize(new THREE.Vector3());
+                
+                log(`Bounds: center(${center.x.toFixed(1)}, ${center.y.toFixed(1)}) size(${size.x.toFixed(1)}, ${size.y.toFixed(1)})`);
+                
+                // Set up orthographic camera for 2D view
+                const margin = Math.max(size.x, size.y) * 0.1;
+                camera.left = center.x - size.x/2 - margin;
+                camera.right = center.x + size.x/2 + margin;
+                camera.top = center.y + size.y/2 + margin;
+                camera.bottom = center.y - size.y/2 - margin;
+                camera.updateProjectionMatrix();
+                
+                controls.target.set(center.x, center.y, 0);
+                controls.update();
+                
+                log('Camera positioned for 2D view');
+            }
+            
+        }, undefined, (error) => {
+            log('ERROR: ' + error.message);
+        });
+        
+        // Color scheme for different mesh types
+        function getColorForMesh(name) {
+            const colors = {
+                'Deck': 0x8B4513,      // Brown
+                'Cabinetry': 0x654321, // Dark brown
+                'Walls': 0x000000,     // Black
+                'Dimensions': 0xFF0000, // Red
+                '0': 0x0000FF          // Blue
+            };
+            return colors[name] || 0x666666;
+        }
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        log('Starting render loop');
+    </script>
+</body>
+</html>
