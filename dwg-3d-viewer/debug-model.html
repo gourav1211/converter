@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Model Debug</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: monospace; }
+        canvas { border: 1px solid #ccc; display: block; margin: 20px 0; }
+        #debug { white-space: pre-wrap; background: #f0f0f0; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h2>Raw Model Debug</h2>
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <div id="debug"></div>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+        const debug = document.getElementById('debug');
+        function log(msg) {
+            console.log(msg);
+            debug.textContent += msg + '\n';
+        }
+
+        // Setup
+        const canvas = document.getElementById('canvas');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xcccccc);
+        
+        const camera = new THREE.PerspectiveCamera(75, 800/600, 0.1, 10000);
+        camera.position.set(200, 200, 200);
+        
+        const renderer = new THREE.WebGLRenderer({ canvas });
+        renderer.setSize(800, 600);
+        
+        const controls = new OrbitControls(camera, canvas);
+        
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+        
+        // Add reference objects
+        const axesHelper = new THREE.AxesHelper(100);
+        scene.add(axesHelper);
+        
+        // Grid
+        const gridHelper = new THREE.GridHelper(200, 20);
+        scene.add(gridHelper);
+        
+        log('Scene setup complete');
+        
+        // Load model
+        const loader = new GLTFLoader();
+        loader.load('/uploads/blocks_and_tables_-_metric.gltf', (gltf) => {
+            log('=== MODEL LOADED ===');
+            log('Root scene children: ' + gltf.scene.children.length);
+            
+            let totalMeshes = 0;
+            let totalVertices = 0;
+            let bounds = new THREE.Box3();
+            
+            gltf.scene.traverse((child) => {
+                log(`${child.type}: "${child.name}" parent: ${child.parent?.name || 'root'}`);
+                
+                if (child.isMesh) {
+                    totalMeshes++;
+                    const geo = child.geometry;
+                    if (geo.attributes.position) {
+                        totalVertices += geo.attributes.position.count;
+                        log(`  - Vertices: ${geo.attributes.position.count}`);
+                        if (geo.index) {
+                            log(`  - Indices: ${geo.index.count}`);
+                        }
+                        
+                        // Calculate bounds for this mesh
+                        const meshBounds = new THREE.Box3().setFromObject(child);
+                        bounds.union(meshBounds);
+                        
+                        // Check material
+                        if (child.material) {
+                            log(`  - Material: ${child.material.type}`);
+                            
+                            // Make material visible
+                            child.material = new THREE.MeshBasicMaterial({
+                                color: 0xff0000,
+                                wireframe: true
+                            });
+                        }
+                    }
+                }
+            });
+            
+            log(`\n=== SUMMARY ===`);
+            log(`Total meshes: ${totalMeshes}`);
+            log(`Total vertices: ${totalVertices}`);
+            
+            const center = bounds.getCenter(new THREE.Vector3());
+            const size = bounds.getSize(new THREE.Vector3());
+            log(`Bounds center: (${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)})`);
+            log(`Bounds size: (${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
+            
+            // Add to scene
+            scene.add(gltf.scene);
+            
+            // Position camera to see the model
+            if (size.length() > 0) {
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const distance = maxDim * 3;
+                
+                // For 2D drawings, look from above
+                if (size.z < 1) {
+                    camera.position.set(center.x, center.y, center.z + distance);
+                    log(`2D view: Camera at (${camera.position.x}, ${camera.position.y}, ${camera.position.z})`);
+                } else {
+                    camera.position.set(
+                        center.x + distance,
+                        center.y + distance,
+                        center.z + distance
+                    );
+                    log(`3D view: Camera at (${camera.position.x}, ${camera.position.y}, ${camera.position.z})`);
+                }
+                
+                camera.lookAt(center);
+                controls.target.copy(center);
+                controls.update();
+            }
+            
+            log('Model added to scene');
+            
+        }, undefined, (error) => {
+            log('ERROR: ' + error.message);
+        });
+        
+        // Animation
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        log('Starting animation loop');
+    </script>
+</body>
+</html>

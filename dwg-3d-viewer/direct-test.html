@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Model Test</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        canvas { border: 2px solid #000; background: #f0f0f0; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .error { background: #ffe6e6; color: #d00; }
+        .success { background: #e6ffe6; color: #060; }
+        .info { background: #e6f3ff; color: #006; }
+        pre { background: #f5f5f5; padding: 10px; overflow: auto; max-height: 300px; }
+        button { padding: 8px 16px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Direct Model Loading Test</h1>
+    
+    <div>
+        <button onclick="loadModel()">Load Model</button>
+        <button onclick="clearLog()">Clear Log</button>
+        <button onclick="showBasicGeometry()">Show Test Geometry</button>
+    </div>
+    
+    <canvas id="viewer" width="800" height="600"></canvas>
+    
+    <div id="status"></div>
+    <pre id="log"></pre>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+        const canvas = document.getElementById('viewer');
+        const status = document.getElementById('status');
+        const log = document.getElementById('log');
+        
+        let scene, camera, renderer, controls;
+        
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            log.textContent += `[${timestamp}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+            console.log(message);
+            
+            status.innerHTML = `<div class="${type}">${message}</div>`;
+        }
+        
+        function clearLog() {
+            log.textContent = '';
+            status.innerHTML = '';
+        }
+        
+        // Initialize Three.js
+        function init() {
+            addLog('Initializing Three.js...');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf0f0f0);
+            
+            camera = new THREE.PerspectiveCamera(75, 800/600, 0.1, 10000);
+            camera.position.set(100, 100, 100);
+            
+            renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            renderer.setSize(800, 600);
+            
+            controls = new OrbitControls(camera, canvas);
+            
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight.position.set(10, 10, 10);
+            scene.add(directionalLight);
+            
+            // Add coordinate axes
+            const axesHelper = new THREE.AxesHelper(50);
+            scene.add(axesHelper);
+            
+            addLog('Three.js initialized successfully', 'success');
+            
+            // Start render loop
+            animate();
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        function showBasicGeometry() {
+            addLog('Adding test geometry...');
+            
+            // Clear previous test geometry
+            const testObjects = scene.children.filter(child => child.name.startsWith('test_'));
+            testObjects.forEach(obj => scene.remove(obj));
+            
+            // Add test cube
+            const geometry = new THREE.BoxGeometry(10, 10, 10);
+            const material = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
+            const cube = new THREE.Mesh(geometry, material);
+            cube.name = 'test_cube';
+            cube.position.set(0, 0, 0);
+            scene.add(cube);
+            
+            // Add some line geometry
+            const lineGeometry = new THREE.BufferGeometry();
+            const linePoints = [
+                new THREE.Vector3(-20, -20, 0),
+                new THREE.Vector3(20, -20, 0),
+                new THREE.Vector3(20, 20, 0),
+                new THREE.Vector3(-20, 20, 0),
+                new THREE.Vector3(-20, -20, 0)
+            ];
+            lineGeometry.setFromPoints(linePoints);
+            
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 3 });
+            const line = new THREE.Line(lineGeometry, lineMaterial);
+            line.name = 'test_line';
+            scene.add(line);
+            
+            camera.position.set(50, 50, 50);
+            camera.lookAt(0, 0, 0);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            
+            addLog('Test geometry added - you should see a red wireframe cube and green line', 'success');
+        }
+        
+        function loadModel() {
+            addLog('Starting model load...');
+            
+            const loader = new GLTFLoader();
+            
+            loader.load(
+                '/uploads/blocks_and_tables_-_metric.gltf',
+                (gltf) => {
+                    addLog('✓ Model loaded successfully!', 'success');
+                    
+                    // Log model structure
+                    addLog(`Scene children: ${gltf.scene.children.length}`);
+                    
+                    let meshCount = 0;
+                    let totalVertices = 0;
+                    let allBounds = new THREE.Box3();
+                    
+                    gltf.scene.traverse((child) => {
+                        addLog(`Found: ${child.type} named "${child.name || 'unnamed'}"`);
+                        
+                        if (child.isMesh) {
+                            meshCount++;
+                            const geo = child.geometry;
+                            if (geo.attributes.position) {
+                                const vertexCount = geo.attributes.position.count;
+                                totalVertices += vertexCount;
+                                addLog(`  └ Vertices: ${vertexCount}, Indices: ${geo.index ? geo.index.count : 'none'}`);
+                                
+                                // Calculate bounds
+                                geo.computeBoundingBox();
+                                if (geo.boundingBox) {
+                                    allBounds.union(geo.boundingBox);
+                                }
+                                
+                                // Make geometry visible
+                                child.material = new THREE.MeshBasicMaterial({
+                                    color: Math.random() * 0xffffff,
+                                    wireframe: true
+                                });
+                            }
+                        }
+                    });
+                    
+                    addLog(`Summary: ${meshCount} meshes, ${totalVertices} total vertices`);
+                    
+                    // Show bounds
+                    const center = allBounds.getCenter(new THREE.Vector3());
+                    const size = allBounds.getSize(new THREE.Vector3());
+                    addLog(`Bounds: center(${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)})`);
+                    addLog(`Size: (${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)})`);
+                    
+                    // Add to scene
+                    scene.add(gltf.scene);
+                    
+                    // Position camera
+                    if (size.length() > 0) {
+                        const maxDim = Math.max(size.x, size.y, size.z);
+                        const distance = maxDim * 2;
+                        
+                        if (size.z < 1) {
+                            // 2D view
+                            camera.position.set(center.x, center.y, center.z + distance);
+                            addLog(`Using 2D view: camera at Z=${center.z + distance}`);
+                        } else {
+                            // 3D view
+                            camera.position.set(center.x + distance, center.y + distance, center.z + distance);
+                            addLog(`Using 3D view: camera at distance ${distance}`);
+                        }
+                        
+                        camera.lookAt(center);
+                        controls.target.copy(center);
+                        controls.update();
+                        
+                        addLog('Camera positioned', 'success');
+                    } else {
+                        addLog('⚠ Model has no meaningful bounds!', 'error');
+                    }
+                    
+                    addLog('Model should now be visible', 'success');
+                },
+                (progress) => {
+                    const percent = Math.round(progress.loaded / progress.total * 100);
+                    addLog(`Loading progress: ${percent}%`);
+                },
+                (error) => {
+                    addLog(`✗ Error loading model: ${error.message}`, 'error');
+                    console.error('Model loading error:', error);
+                }
+            );
+        }
+        
+        // Make functions global
+        window.loadModel = loadModel;
+        window.clearLog = clearLog;
+        window.showBasicGeometry = showBasicGeometry;
+        
+        // Initialize on page load
+        init();
+        addLog('Page loaded. Click "Load Model" to test model loading.');
+    </script>
+</body>
+</html>
